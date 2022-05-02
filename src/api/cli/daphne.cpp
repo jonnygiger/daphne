@@ -127,6 +127,10 @@ main(int argc, char** argv)
             "vec", cat(daphneOptions),
             desc("Enable vectorized execution engine")
     );
+    opt<bool> nonBlockingTaskQueues(
+            "non-blocking-queues", cat(daphneOptions),
+            desc("Enable vectorized execution engine")
+    );
     
     // Other options
     

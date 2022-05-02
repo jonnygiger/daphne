@@ -106,4 +106,101 @@ public:
     }
 };
 
+class NonBlockingTaskQueue : public TaskQueue {
+private:
+    std::list<Task*> _data;
+    std::mutex _qmutex;
+    EOFTask _eof; // end marker
+	UnavailableTask _unavailTask; // placeholder to return for failed dequeues
+    uint64_t _capacity;
+    bool _closedInput;
+
+public:
+    NonBlockingTaskQueue() : NonBlockingTaskQueue(DEFAULT_MAX_SIZE) {}
+    explicit NonBlockingTaskQueue(uint64_t capacity) {
+        _closedInput = false;
+        _capacity = capacity;
+    }
+    ~NonBlockingTaskQueue() override = default;
+
+    void enqueueTask(Task* t) override {
+		// try the lock
+		if (_qmutex.try_lock()) {
+			// got the lock, check if there is space
+			if( _data.size() < _capacity ) {
+				// add task to end of list
+				_data.push_back(t);
+			} else {
+				// no space left on queue
+				return -1;
+			}
+		} else {
+			// lock was not available
+			return -1;
+		}
+    }
+
+    void enqueueTaskOnTargetQueue(Task* t, int targetCPU) override {
+        // Change CPU pinning before enqueue to utilize NUMA first-touch policy
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(targetCPU, &cpuset);
+        sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+		// try the lock
+		if (_qmutex.try_lock()) {
+			// got the lock, check if there is space
+			if( _data.size() < _capacity ) {
+				// add task to end of list
+				_data.push_back(t);
+			} else {
+				// no space left on queue
+				return -1;
+			}
+		} else {
+			// lock was not available
+			return -1;
+		}
+    }
+
+    Task* dequeueTask() override {
+        // lock mutex, released at end of scope
+        std::unique_lock<std::mutex> ul(_qmutex);
+        // blocking wait for new tasks
+		// try the lock
+		if (_qmutex.try_lock()) {
+			if( !_data.empty() ) {
+				// obtain next task
+				Task* t = _data.front();
+				_data.pop_front();
+				return t;
+			} else {
+				if( _closedInput ) {
+					// Queue is empty and closed
+					return &_eof;
+				} else {
+					// Queue is empty but still open
+					return -1;
+			}
+		} else {
+			// lock not available
+			return -1;
+		}
+		return -1;
+    }
+
+    uint64_t size() override {
+        // this operation is blocking because it should not fail
+		_qmutex.lock();
+		int currentSize = _data.size();
+		_qmutex.unlock();
+        return currentSize;
+    }
+
+    void closeInput() override {
+        _qmutex.lock();
+        _closedInput = true;
+        _qmutex.unlock();
+    }
+};
+
 #endif //SRC_RUNTIME_LOCAL_VECTORIZED_TASKQUEUES_H

@@ -43,6 +43,7 @@ struct DaphneUserConfig {
     bool explain_sql = false;
     bool explain_vectorized = false;
     bool explain_obj_ref_mgnt = false;
+    bool nonBlockingTaskQueues = false;
     SelfSchedulingScheme taskPartitioningScheme = STATIC;
     QueueTypeOption queueSetupScheme = CENTRALIZED;
 	victimSelectionLogic victimSelection = SEQPRI;

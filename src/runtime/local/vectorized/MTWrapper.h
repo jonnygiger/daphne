@@ -57,8 +57,13 @@ protected:
 
     void initCPPWorkers(TaskQueue* q, uint32_t batchSize, bool verbose = false) {
         cpp_workers.resize(_numCPPThreads);
-        for(auto& w : cpp_workers)
-            w = std::make_unique<WorkerCPU>(q, verbose, 0, batchSize);
+        if( ctx->getUserConfig().nonBlockingTaskQueues == true ) {
+            for(auto& w : cpp_workers)
+                w = std::make_unique<NonBlockingWorkerCPU>(q, verbose, 0, batchSize);
+        } else {
+            for(auto& w : cpp_workers)
+                w = std::make_unique<WorkerCPU>(q, verbose, 0, batchSize);
+        }
     }
 
     void initCPPWorkersPerCPU(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0) {
@@ -67,9 +72,16 @@ protected:
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
         int i = 0;
-        for(auto& w : cpp_workers) {
-            w = std::make_unique<WorkerCPUPerCPU>(qvector, numaDomains, verbose, 0, batchSize, i, numQueues, queueMode, stealLogic);
-            i++;
+        if( ctx->getUserConfig().nonBlockingTaskQueues == true ) {
+            for(auto& w : cpp_workers) {
+                w = std::make_unique<NonBlockingWorkerCPUPerCPU>(qvector, numaDomains, verbose, 0, batchSize, i, numQueues, queueMode, stealLogic);
+                i++;
+            }
+        } else {
+            for(auto& w : cpp_workers) {
+                w = std::make_unique<WorkerCPUPerCPU>(qvector, numaDomains, verbose, 0, batchSize, i, numQueues, queueMode, stealLogic);
+                i++;
+            }
         }
     }
     
@@ -79,9 +91,16 @@ protected:
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
         int i = 0;
-        for(auto& w : cpp_workers) {
-            w = std::make_unique<WorkerCPUPerGroup>(qvector, numaDomains, verbose, 0, batchSize, i, numQueues, queueMode, stealLogic);
-            i++;
+        if( ctx->getUserConfig().nonBlockingTaskQueues == true ) {
+            for(auto& w : cpp_workers) {
+                w = std::make_unique<NonBlockingWorkerCPUPerGroup>(qvector, numaDomains, verbose, 0, batchSize, i, numQueues, queueMode, stealLogic);
+                i++;
+            }
+        } else {
+            for(auto& w : cpp_workers) {
+                w = std::make_unique<WorkerCPUPerGroup>(qvector, numaDomains, verbose, 0, batchSize, i, numQueues, queueMode, stealLogic);
+                i++;
+            }
         }
     }
 

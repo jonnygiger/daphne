@@ -34,7 +34,11 @@ void MTWrapper<DenseMatrix<VT>>::executeSingleQueue(
     auto row_mem = mem_required / len;
 
     // create task queue (w/o size-based blocking)
-    std::unique_ptr<TaskQueue> q = std::make_unique<BlockingTaskQueue>(len);
+    if( ctx->getUserConfig().nonBlockingTaskQueues == true ) {
+        std::unique_ptr<TaskQueue> q = std::make_unique<NonBlockingTaskQueue>(len);
+    } else {
+        std::unique_ptr<TaskQueue> q = std::make_unique<BlockingTaskQueue>(len);
+    }
 
     auto batchSize8M = std::max(100ul, static_cast<size_t>(std::ceil(8388608 / row_mem)));
     this->initCPPWorkers(q.get(), batchSize8M, verbose);
@@ -128,7 +132,7 @@ void MTWrapper<DenseMatrix<VT>>::executeQueuePerCPU(
     std::vector<std::unique_ptr<TaskQueue>> q;
     std::vector<TaskQueue*> qvector;
     for(int i=0; i<_numQueues; i++) {
-        // Normally it would be done like this:
+        // Normally it would be created like this:
         // q.emplace_back(new BlockingTaskQueue(len));
         // However I'm getting an error so they are created with make_unique and get now.
         
@@ -136,7 +140,11 @@ void MTWrapper<DenseMatrix<VT>>::executeQueuePerCPU(
         CPU_ZERO(&cpuset);
         CPU_SET(i, &cpuset);
         sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
-        std::unique_ptr<TaskQueue> tmp = std::make_unique<BlockingTaskQueue>(len);
+        if( ctx->getUserConfig().nonBlockingTaskQueues == true ) {
+            std::unique_ptr<TaskQueue> tmp = std::make_unique<NonBlockingTaskQueue>(len);
+        } else {
+            std::unique_ptr<TaskQueue> tmp = std::make_unique<BlockingTaskQueue>(len);
+        }
         q.push_back(std::move(tmp));
         qvector.push_back(q[i].get());
     }

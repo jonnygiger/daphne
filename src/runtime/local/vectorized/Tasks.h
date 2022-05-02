@@ -47,6 +47,15 @@ public:
     uint64_t getTaskSize() override {return 0;}
 };
 
+// task for signaling failed dequeue (either empty or lock not available)
+class UnavailableTask : public Task {
+public:
+    UnavailableTask() = default;
+    ~UnavailableTask() override = default;
+    void execute(uint32_t fid, uint32_t batchSize) override {}
+    uint64_t getTaskSize() override {return 0;}
+};
+
 template<class DT>
 struct CompiledPipelineTaskData {
     std::vector<std::function<void(DT ***, Structure **, DCTX(ctx))>> _funcs;
