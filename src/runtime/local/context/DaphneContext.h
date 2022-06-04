@@ -25,6 +25,7 @@
 #include <iostream>
 #include <memory>
 #include <chrono>
+#include <fstream>
 
 #include "IContext.h"
 
@@ -66,6 +67,7 @@ struct DaphneContext {
 
     std::vector<std::unique_ptr<IContext>> cuda_contexts;
     int MTCounter = 0;
+    std::chrono::time_point<std::chrono::_V2::steady_clock> StartTime;
     
     std::vector<std::vector<Entry>> timeTraceEntries;
     /*
@@ -87,6 +89,7 @@ struct DaphneContext {
     explicit DaphneContext(DaphneUserConfig& config) : config(config) {
         //
         std::cout << "DaphneContext Start." << std::endl;
+	StartTime = std::chrono::_V2::steady_clock::now();
 	for(int i=0; i<20; i++) {
 	    timeTraceEntries.push_back(std::vector<Entry>(0));
 	}
@@ -99,14 +102,27 @@ struct DaphneContext {
 	//std::cout << timeTraceEntries[0][0].LocalTaskID << std::endl;
 	std::cout << "Size of main vector=" << timeTraceEntries.size() << std::endl;
 	std::cout << "Size of first subvector=" << timeTraceEntries[0].size() << std::endl;
+	/*
 	for (size_t i=0; i<timeTraceEntries.size(); i++) {
 	    for (size_t j=0; j<timeTraceEntries[i].size(); j++) {
 		auto durationForPrinting = std::chrono::duration_cast<std::chrono::microseconds>(timeTraceEntries[i][j].Duration).count();
-	        std::cout << durationForPrinting << "," << timeTraceEntries[i][j].Worker << "," << timeTraceEntries[i][j].Round << "," << timeTraceEntries[i][j].LocalTaskID << " ";
+		auto relativeStartTime = std::chrono::duration_cast<std::chrono::microseconds>(timeTraceEntries[i][j].Start - StartTime).count();
+	        std::cout << relativeStartTime << "," << durationForPrinting << "," << timeTraceEntries[i][j].Worker << "," << timeTraceEntries[i][j].Round << "," << timeTraceEntries[i][j].LocalTaskID << " ";
 	    }
 	    std::cout << std::endl;
 	}
+	*/
 	std::cout << "DaphneContext End." << std::endl;
+	std::ofstream taskTraceFile;
+	taskTraceFile.open("taskTraceFile.csv");
+	for (size_t i=0; i<timeTraceEntries.size(); i++) {
+	    for (size_t j=0; j<timeTraceEntries[i].size(); j++) {
+	        auto durationForPrinting = std::chrono::duration_cast<std::chrono::microseconds>(timeTraceEntries[i][j].Duration).count();
+		auto relativeStartTime = std::chrono::duration_cast<std::chrono::microseconds>(timeTraceEntries[i][j].Start - StartTime).count();
+		taskTraceFile << relativeStartTime << "," << durationForPrinting << "," << timeTraceEntries[i][j].Worker << "," << timeTraceEntries[i][j].Round << "," << timeTraceEntries[i][j].LocalTaskID << "\n";
+	    }
+	}
+	taskTraceFile.close();
         cuda_contexts.clear();
     }
 
