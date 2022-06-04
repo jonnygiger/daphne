@@ -210,7 +210,7 @@ template<typename VT>
     std::unique_ptr<TaskQueue> q_cpp;
     if(cpu_task_len > 0) {
         q_cpp = std::make_unique<BlockingTaskQueue>(cpu_task_len);
-        this->initCPPWorkers(q_cpp.get(), batchSize8M, verbose);
+        this->initCPPWorkers2(q_cpp.get(), batchSize8M, verbose);
         res_cpp = new DenseMatrix<VT> **[numOutputs];
         auto offset = device_task_len;
 

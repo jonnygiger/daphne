@@ -61,10 +61,14 @@ class WorkerCPU : public Worker {
     bool _verbose;
     uint32_t _fid;
     uint32_t _batchSize;
+    int _threadID;
+    int _round;
+    int _localTaskCounter;
+    std::vector<Entry> *_localTraceEntries;
 public:
     // this constructor is to be used in practice
-    WorkerCPU(TaskQueue* tq, bool verbose, uint32_t fid = 0, uint32_t batchSize = 100) : Worker(), _q(tq),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize) {
+    WorkerCPU(TaskQueue* tq, bool verbose, int workerNumber, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int round = 0) : Worker(), _q(tq),
+            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(workerNumber), _round(round), _localTraceEntries(timeTraceEntries) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPU::run, this);
     }
@@ -72,14 +76,19 @@ public:
     ~WorkerCPU() override = default;
 
     void run() override {
+	_localTaskCounter = 0;
         Task* t = _q->dequeueTask();
 
         while( !isEOF(t) ) {
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter};
             t->execute(_fid, _batchSize);
             delete t;
+	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+	    _localTraceEntries->push_back(std::move(E));
+	    _localTaskCounter++;
             //get next tasks (blocking)
             t = _q->dequeueTask();
         }
@@ -101,10 +110,11 @@ class WorkerCPUPerCPU : public Worker {
     int _queueMode;
     int _stealLogic;
     bool _pinWorkers;
+    std::vector<Entry> *_localTraceEntries;
 public:
     // this constructor is to be used in practice
-    WorkerCPUPerCPU(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, uint32_t fid = 0, uint32_t batchSize = 100, int threadID = 0, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers) {
+    WorkerCPUPerCPU(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
+            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPUPerCPU::run, this);
     }
@@ -266,10 +276,11 @@ class WorkerCPUPerGroup : public Worker {
     int _queueMode;
     int _stealLogic;
     bool _pinWorkers;
+    std::vector<Entry> *_localTraceEntries;
 public:
     // this constructor is to be used in practice
-    WorkerCPUPerGroup(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, uint32_t fid = 0, uint32_t batchSize = 100, int threadID = 0, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers) {
+    WorkerCPUPerGroup(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
+            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPUPerGroup::run, this);
     }

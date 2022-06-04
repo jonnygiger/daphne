@@ -26,12 +26,23 @@
 #include <queue>
 #include <fstream>
 #include <set>
+#include <chrono>
 
 //TODO use the wrapper to cache threads
 //TODO generalize for arbitrary inputs (not just binary)
 
 using mlir::daphne::VectorSplit;
 using mlir::daphne::VectorCombine;
+
+//typedef std::chrono::duration<std::chrono::_V2::steady_clock::rep, std::chrono::_V2::steady_clock::period> DurationType;
+/*
+This is now defined in DaphneContext
+struct Entry {
+    std::chrono::time_point<std::chrono::_V2::steady_clock> Start;
+    DurationType Duration;
+    int LocalTaskID;
+};
+*/
 
 template <typename DT>
 class MTWrapperBase {
@@ -49,6 +60,7 @@ protected:
     int _numQueues;
     int _stealLogic;
     int _totalNumaDomains;
+    int _currentRound;
     DCTX(_ctx);
 
     std::pair<size_t, size_t> getInputProperties(Structure** inputs, size_t numInputs, VectorSplit* splits) {
@@ -108,20 +120,27 @@ protected:
         }
     }
 
-    void initCPPWorkers(TaskQueue* q, uint32_t batchSize, bool verbose = false) {
+    void initCPPWorkers2(TaskQueue* q, uint32_t batchSize, bool verbose = false) {
         cpp_workers.resize(_numCPPThreads);
+	std::vector<Entry> tmp;
         for(auto& w : cpp_workers)
-            w = std::make_unique<WorkerCPU>(q, verbose, 0, batchSize);
+            w = std::make_unique<WorkerCPU>(q, verbose, 0, &tmp, 0, batchSize); // fix this do not pass blank vector for pointer
     }
-    
+
     void initCPPWorkers(std::vector<TaskQueue*> &qvector, uint32_t batchSize, bool verbose = false) {
         cpp_workers.resize(_numCPPThreads);
-        for(auto& w : cpp_workers)
-            w = std::make_unique<WorkerCPU>(qvector[0], verbose, 0, batchSize);
+	_ctx->timeTraceEntries.resize(_numCPPThreads);
+	int workerNumber = 0;
+        for(auto& w : cpp_workers) {
+	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
+            w = std::make_unique<WorkerCPU>(qvector[0], verbose, workerNumber, &(_ctx->timeTraceEntries[workerNumber]), 0, batchSize, _currentRound);
+	    workerNumber++;
+	}
     }
     
     void initCPPWorkersPerCPU(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) {
         cpp_workers.resize(_numCPPThreads);
+	_ctx->timeTraceEntries.resize(_numCPPThreads);
         if( numQueues == 0 ) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
@@ -129,13 +148,15 @@ protected:
         
         int i = 0;
         for( auto& w : cpp_workers ) {
-            w = std::make_unique<WorkerCPUPerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, 0, batchSize, i, numQueues, queueMode, this->_stealLogic, pinWorkers);
+	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
+            w = std::make_unique<WorkerCPUPerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers);
             i++;
         }
     }
     
     void initCPPWorkersPerGroup(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) {
         cpp_workers.resize(_numCPPThreads);
+	_ctx->timeTraceEntries.resize(_numCPPThreads);
         if (numQueues == 0) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
@@ -144,7 +165,8 @@ protected:
             topologyUniqueThreads.resize(_numCPPThreads);
         int i = 0;
         for(auto& w : cpp_workers) {
-            w = std::make_unique<WorkerCPUPerGroup>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, 0, batchSize, i, numQueues, queueMode, this->_stealLogic, pinWorkers);
+	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
+            w = std::make_unique<WorkerCPUPerGroup>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers);
             i++;
         }
     }
@@ -198,11 +220,16 @@ protected:
 
 public:
     explicit MTWrapperBase(uint32_t numThreads, uint32_t numFunctions, DCTX(ctx)) : _ctx(ctx) {
+	std::cout << "MTWrapper Start. Counter=" << _ctx->MTCounter << std::endl;
+	_currentRound = _ctx->MTCounter;
+	_ctx->MTCounter++;
+	get_topology(topologyPhysicalIds, topologyUniqueThreads);
         if(ctx->config.numberOfThreads > 0){
             _numThreads = ctx->config.numberOfThreads;
         }
         else{
-            _numThreads = std::thread::hardware_concurrency();
+            //_numThreads = std::thread::hardware_concurrency();
+	    _numThreads = topologyUniqueThreads.size();
         }
         if(ctx && ctx->useCUDA() && numFunctions > 1)
             _numCUDAThreads = ctx->cuda_contexts.size();
@@ -211,7 +238,6 @@ public:
         _queueMode = 0;
         _numQueues = 1;
         _stealLogic = ctx->getUserConfig().victimSelection;
-        get_topology(topologyPhysicalIds, topologyUniqueThreads);
         if( std::thread::hardware_concurrency() < topologyUniqueThreads.size() && _ctx->config.hyperthreadingEnabled )
             topologyUniqueThreads.resize(_numCPPThreads);
         _totalNumaDomains = std::set<double>( topologyPhysicalIds.begin(), topologyPhysicalIds.end() ).size();
@@ -223,6 +249,7 @@ public:
         } else if (ctx->getUserConfig().queueSetupScheme == PERCPU) {
             _queueMode = 2;
             _numQueues = _numThreads;
+	    //_numQueues = topologyUniqueThreads.size();
         }
         
         if( _ctx->config.debugMultiThreading ) {
@@ -243,7 +270,10 @@ public:
 #endif
     }
 
-    virtual ~MTWrapperBase() = default;
+//    virtual ~MTWrapperBase() = default;
+    virtual ~MTWrapperBase() {
+        std::cout << "MTWrapper end." << std::endl;
+    }
 };
 
 template<typename DT>
