@@ -27,6 +27,7 @@
 #include <fstream>
 #include <set>
 #include <chrono>
+#include <iomanip>
 
 //TODO use the wrapper to cache threads
 //TODO generalize for arbitrary inputs (not just binary)
@@ -130,6 +131,27 @@ protected:
     void initCPPWorkers(std::vector<TaskQueue*> &qvector, uint32_t batchSize, bool verbose = false) {
         cpp_workers.resize(_numCPPThreads);
 	_ctx->timeTraceEntries.resize(_numCPPThreads);
+	for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "----";
+	}
+	std::cout << "--------";
+	std::cout << std::setw(3);
+	std::cout << std::endl;
+	std::cout << "Worker ";
+	for(size_t i=0; i<cpp_workers.size(); i++) {
+	    std::cout << "|" << std::setw(3) << i;
+	}
+	std::cout << "|" << std::endl;
+	std::cout << "Queue  ";
+	for(size_t i=0; i<cpp_workers.size(); i++) {
+	    std::cout << "|  0";
+	}
+	std::cout << "|" << std::endl;
+	for(size_t i=0; i<cpp_workers.size(); i++) {
+	    std::cout << "----";
+	}
+	std::cout << "--------";
+	std::cout << std::endl;
 	int workerNumber = 0;
         for(auto& w : cpp_workers) {
 	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
@@ -144,12 +166,31 @@ protected:
         if( numQueues == 0 ) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
-        //get_topology(topologyPhysicalIds, topologyUniqueThreads);
-        
+	for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "----";
+        }
+        std::cout << "--------";
+        std::cout << std::setw(3);
+        std::cout << std::endl;
+        std::cout << "Worker ";
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "|" << std::setw(3) << i;
+        }
+        std::cout << "|" << std::endl;
+        std::cout << "Queue  ";
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "|" << std::setw(3) << i;
+        }
+        std::cout << "|" << std::endl;
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "----";
+        }
+        std::cout << "--------";
+        std::cout << std::endl;
         int i = 0;
         for( auto& w : cpp_workers ) {
 	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
-            w = std::make_unique<WorkerCPUPerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers);
+            w = std::make_unique<WorkerCPUPerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers, _currentRound);
             i++;
         }
     }
@@ -160,13 +201,33 @@ protected:
         if (numQueues == 0) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
-        //get_topology(topologyPhysicalIds, topologyUniqueThreads);
+	for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "----";
+        }
+        std::cout << "--------";
+        std::cout << std::setw(3);
+        std::cout << std::endl;
+        std::cout << "Worker ";
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "|" << std::setw(3) << i;
+        }
+        std::cout << "|" << std::endl;
+        std::cout << "Queue  ";
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "|" << std::setw(3) << topologyPhysicalIds[i];
+        }
+        std::cout << "|" << std::endl;
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "----";
+        }
+        std::cout << "--------";
+        std::cout << std::endl;
         if( _numCPPThreads < topologyUniqueThreads.size() )
             topologyUniqueThreads.resize(_numCPPThreads);
         int i = 0;
         for(auto& w : cpp_workers) {
 	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
-            w = std::make_unique<WorkerCPUPerGroup>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers);
+            w = std::make_unique<WorkerCPUPerGroup>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers, _currentRound);
             i++;
         }
     }

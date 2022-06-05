@@ -46,6 +46,7 @@ struct Entry {
     int Worker;
     int Round;
     int LocalTaskID;
+    int stealSource; // 0=local task, 1=normal steal, 2=prioritized steal
 };
 
 /**
@@ -119,7 +120,7 @@ struct DaphneContext {
 	    for (size_t j=0; j<timeTraceEntries[i].size(); j++) {
 	        auto durationForPrinting = std::chrono::duration_cast<std::chrono::microseconds>(timeTraceEntries[i][j].Duration).count();
 		auto relativeStartTime = std::chrono::duration_cast<std::chrono::microseconds>(timeTraceEntries[i][j].Start - StartTime).count();
-		taskTraceFile << relativeStartTime << "," << durationForPrinting << "," << timeTraceEntries[i][j].Worker << "," << timeTraceEntries[i][j].Round << "," << timeTraceEntries[i][j].LocalTaskID << "\n";
+		taskTraceFile << relativeStartTime << "," << durationForPrinting << "," << timeTraceEntries[i][j].Worker << "," << timeTraceEntries[i][j].Round << "," << timeTraceEntries[i][j].LocalTaskID << "," << timeTraceEntries[i][j].stealSource << "\n";
 	    }
 	}
 	taskTraceFile.close();

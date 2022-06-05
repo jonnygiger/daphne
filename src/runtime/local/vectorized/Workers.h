@@ -83,7 +83,7 @@ public:
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
-	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter};
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 0};
             t->execute(_fid, _batchSize);
             delete t;
 	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -109,12 +109,14 @@ class WorkerCPUPerCPU : public Worker {
     int _numQueues;
     int _queueMode;
     int _stealLogic;
+    int _round;
+    int _localTaskCounter;
     bool _pinWorkers;
     std::vector<Entry> *_localTraceEntries;
 public:
     // this constructor is to be used in practice
-    WorkerCPUPerCPU(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries) {
+    WorkerCPUPerCPU(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0, int round = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
+            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries), _round(round) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPUPerCPU::run, this);
     }
@@ -122,6 +124,7 @@ public:
     ~WorkerCPUPerCPU() override = default;
 
     void run() override {
+	_localTaskCounter = 0;
         if (_pinWorkers) {
             // pin worker to CPU core
             cpu_set_t cpuset;
@@ -139,8 +142,12 @@ public:
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 0};
             t->execute(_fid, _batchSize);
             delete t;
+	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+	    _localTraceEntries->push_back(std::move(E));
+	    _localTaskCounter++;
             //get next tasks (blocking)
             t = _q[targetQueue]->dequeueTask();
         }
@@ -155,8 +162,12 @@ public:
                 if( isEOF(t) ) {
                     targetQueue = (targetQueue+1)%_numQueues;
                 } else {
+		    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
                     t->execute(_fid, _batchSize);
                     delete t;
+		    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+                    _localTraceEntries->push_back(std::move(E));
+                    _localTaskCounter++;
                 }
             }
         } else if ( _stealLogic == 1) {
@@ -170,8 +181,12 @@ public:
                     if( isEOF(t) ) {
                         targetQueue = (targetQueue+1)%_numQueues;
                     } else {
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 2};
                         t->execute(_fid, _batchSize);
                         delete t;
+			E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+			_localTraceEntries->push_back(std::move(E));
+			_localTaskCounter++;
                     }
                 } else {
                     targetQueue = (targetQueue+1)%_numQueues;
@@ -188,8 +203,11 @@ public:
                     if( isEOF(t) ) {
                         targetQueue = (targetQueue+1)%_numQueues;
                     } else {
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
                         t->execute(_fid, _batchSize);
                         delete t;
+			_localTraceEntries->push_back(std::move(E));
+			_localTaskCounter++;
                     }
                 } else {
                     targetQueue = (targetQueue+1)%_numQueues;
@@ -207,8 +225,12 @@ public:
                     if( isEOF(t) ) {
                         eofWorkers[targetQueue] = true;
                     } else {
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
                         t->execute(_fid, _batchSize);
                         delete t;
+			E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+			_localTraceEntries->push_back(std::move(E));
+			_localTaskCounter++;
                     }
                 }
             }
@@ -232,8 +254,12 @@ public:
                         if( isEOF(t) ) {
                             eofWorkers[targetQueue] = true;
                         } else {
+			    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 2};
                             t->execute(_fid, _batchSize);
                             delete t;
+			    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+			    _localTraceEntries->push_back(std::move(E));
+			    _localTaskCounter++;
                         }
                     }
                 }
@@ -250,8 +276,12 @@ public:
                     if( isEOF(t) ) {
                         eofWorkers[targetQueue] = true;
                     } else {
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
                         t->execute(_fid, _batchSize);
                         delete t;
+			E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+			_localTraceEntries->push_back(std::move(E));
+			_localTaskCounter++;
                     }
                 }
             }
@@ -275,12 +305,14 @@ class WorkerCPUPerGroup : public Worker {
     int _numQueues;
     int _queueMode;
     int _stealLogic;
+    int _round;
+    int _localTaskCounter;
     bool _pinWorkers;
     std::vector<Entry> *_localTraceEntries;
 public:
     // this constructor is to be used in practice
-    WorkerCPUPerGroup(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries) {
+    WorkerCPUPerGroup(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0, int round = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
+            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries), _round(round) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPUPerGroup::run, this);
     }
@@ -288,6 +320,7 @@ public:
     ~WorkerCPUPerGroup() override = default;
 
     void run() override {
+	_localTaskCounter = 0;
         if (_pinWorkers) {
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
@@ -303,8 +336,12 @@ public:
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 0};
             t->execute(_fid, _batchSize);
             delete t;
+	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+	    _localTraceEntries->push_back(std::move(E));
+	    _localTaskCounter++;
             //get next tasks (blocking)
             t = _q[targetQueue]->dequeueTask();
         }
@@ -320,8 +357,12 @@ public:
             if( isEOF(t) ) {
                 targetQueue = (targetQueue+1)%_numQueues;
             } else {
+		Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
                 t->execute(_fid, _batchSize);
                 delete t;
+		E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
+		_localTraceEntries->push_back(std::move(E));
+		_localTaskCounter++;
             }
         }
 

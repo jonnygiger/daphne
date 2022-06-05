@@ -109,6 +109,7 @@ void MTWrapper<DenseMatrix<VT>>::executeCpuQueues(
                             inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
                             outCols, 0, ctx}, resLock, res), target);
                     startChunk = endChunk;
+		    currentItr++;
                 }
             }
         } else {
@@ -120,6 +121,7 @@ void MTWrapper<DenseMatrix<VT>>::executeCpuQueues(
                             inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
                             outCols, 0, ctx}, resLock, res));
                     startChunk = endChunk;
+		    currentItr++;
                 }
             }
         }
@@ -132,19 +134,27 @@ void MTWrapper<DenseMatrix<VT>>::executeCpuQueues(
                 qvector[target]->enqueueTaskPinned(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
                         inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
                         outCols, 0, ctx}, resLock, res), target);
+		currentItr++;
                 startChunk = endChunk;
             }
         } else {
+            std::cout << "_numQueues" << this->_numQueues << std::endl;
             while (lp.hasNextChunk()) {
                 endChunk += lp.getNextChunk();
                 target = currentItr % this->_numQueues;
                 qvector[target]->enqueueTask(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
                         inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
                         outCols, 0, ctx}, resLock, res));
+		currentItr++;
                 startChunk = endChunk;
             }
         }
     }
+    std::cout << "QSizes: ";
+    for(size_t i=0; i<qvector.size(); i++) {
+        std::cout << qvector[i]->size() << ",";
+    }
+    std::cout << std::endl;
     for(int i=0; i<this->_numQueues; i++) {
         qvector[i]->closeInput();
     }
