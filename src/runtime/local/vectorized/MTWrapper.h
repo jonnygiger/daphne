@@ -63,6 +63,7 @@ protected:
     int _totalNumaDomains;
     int _currentRound;
     DCTX(_ctx);
+    Entry E_wrapper;
 
     std::pair<size_t, size_t> getInputProperties(Structure** inputs, size_t numInputs, VectorSplit* splits) {
         auto len = 0ul;
@@ -130,104 +131,104 @@ protected:
 
     void initCPPWorkers(std::vector<TaskQueue*> &qvector, uint32_t batchSize, bool verbose = false) {
         cpp_workers.resize(_numCPPThreads);
-	_ctx->timeTraceEntries.resize(_numCPPThreads);
-	for(size_t i=0; i<cpp_workers.size(); i++) {
+	_ctx->timeTraceEntries.resize(_numCPPThreads + 1);
+	if( _ctx->config.debugMultiThreading ) {
+        for(size_t i=0; i<cpp_workers.size(); i++) {
             std::cout << "----";
+        }
+        std::cout << "--------";
+        std::cout << std::endl;
+        std::cout << "Worker ";
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "|" << std::setw(3) << i;
+        }
+        std::cout << "|" << std::endl;
+        std::cout << "Queue  ";
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "|  0";
+        }
+        std::cout << "|" << std::endl;
+        for(size_t i=0; i<cpp_workers.size(); i++) {
+            std::cout << "----";
+        }
+        std::cout << "--------";
+        std::cout << std::endl;
 	}
-	std::cout << "--------";
-	std::cout << std::setw(3);
-	std::cout << std::endl;
-	std::cout << "Worker ";
-	for(size_t i=0; i<cpp_workers.size(); i++) {
-	    std::cout << "|" << std::setw(3) << i;
-	}
-	std::cout << "|" << std::endl;
-	std::cout << "Queue  ";
-	for(size_t i=0; i<cpp_workers.size(); i++) {
-	    std::cout << "|  0";
-	}
-	std::cout << "|" << std::endl;
-	for(size_t i=0; i<cpp_workers.size(); i++) {
-	    std::cout << "----";
-	}
-	std::cout << "--------";
-	std::cout << std::endl;
 	int workerNumber = 0;
         for(auto& w : cpp_workers) {
-	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
-            w = std::make_unique<WorkerCPU>(qvector[0], verbose, workerNumber, &(_ctx->timeTraceEntries[workerNumber]), 0, batchSize, _currentRound);
+            w = std::make_unique<WorkerCPU>(qvector[0], verbose, workerNumber, &(_ctx->timeTraceEntries[workerNumber + 1]), 0, batchSize, _currentRound);
 	    workerNumber++;
 	}
     }
     
     void initCPPWorkersPerCPU(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) {
         cpp_workers.resize(_numCPPThreads);
-	_ctx->timeTraceEntries.resize(_numCPPThreads);
+        _ctx->timeTraceEntries.resize(_numCPPThreads + 1);
         if( numQueues == 0 ) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
-	for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "----";
+        if( _ctx->config.debugMultiThreading ) {
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "----";
+            }
+            std::cout << "--------";
+            std::cout << std::endl;
+            std::cout << "Worker ";
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "|" << std::setw(3) << i;
+            }
+            std::cout << "|" << std::endl;
+            std::cout << "Queue  ";
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "|" << std::setw(3) << i;
+            }
+            std::cout << "|" << std::endl;
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "----";
+            }
+            std::cout << "--------";
+            std::cout << std::endl;
         }
-        std::cout << "--------";
-        std::cout << std::setw(3);
-        std::cout << std::endl;
-        std::cout << "Worker ";
-        for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "|" << std::setw(3) << i;
-        }
-        std::cout << "|" << std::endl;
-        std::cout << "Queue  ";
-        for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "|" << std::setw(3) << i;
-        }
-        std::cout << "|" << std::endl;
-        for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "----";
-        }
-        std::cout << "--------";
-        std::cout << std::endl;
         int i = 0;
         for( auto& w : cpp_workers ) {
-	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
-            w = std::make_unique<WorkerCPUPerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers, _currentRound);
+            w = std::make_unique<WorkerCPUPerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i + 1], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers, _currentRound);
             i++;
         }
     }
     
     void initCPPWorkersPerGroup(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) {
         cpp_workers.resize(_numCPPThreads);
-	_ctx->timeTraceEntries.resize(_numCPPThreads);
+	_ctx->timeTraceEntries.resize(_numCPPThreads + 1);
         if (numQueues == 0) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
         }
-	for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "----";
+        if( _ctx->config.debugMultiThreading ) {
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "----";
+            }
+            std::cout << "--------";
+            std::cout << std::endl;
+            std::cout << "Worker ";
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "|" << std::setw(3) << i;
+            }
+            std::cout << "|" << std::endl;
+            std::cout << "Queue  ";
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "|" << std::setw(3) << topologyPhysicalIds[i];
+            }
+            std::cout << "|" << std::endl;
+            for(size_t i=0; i<cpp_workers.size(); i++) {
+                std::cout << "----";
+            }
+            std::cout << "--------";
+            std::cout << std::endl;
         }
-        std::cout << "--------";
-        std::cout << std::setw(3);
-        std::cout << std::endl;
-        std::cout << "Worker ";
-        for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "|" << std::setw(3) << i;
-        }
-        std::cout << "|" << std::endl;
-        std::cout << "Queue  ";
-        for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "|" << std::setw(3) << topologyPhysicalIds[i];
-        }
-        std::cout << "|" << std::endl;
-        for(size_t i=0; i<cpp_workers.size(); i++) {
-            std::cout << "----";
-        }
-        std::cout << "--------";
-        std::cout << std::endl;
         if( _numCPPThreads < topologyUniqueThreads.size() )
             topologyUniqueThreads.resize(_numCPPThreads);
         int i = 0;
         for(auto& w : cpp_workers) {
-	    //_ctx->timeTraceEntries.push_back(std::vector<Entry> {});
-            w = std::make_unique<WorkerCPUPerGroup>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers, _currentRound);
+            w = std::make_unique<WorkerCPUPerGroup>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, i, &_ctx->timeTraceEntries[i + 1], 0, batchSize, numQueues, queueMode, this->_stealLogic, pinWorkers, _currentRound);
             i++;
         }
     }
@@ -284,6 +285,10 @@ public:
 	std::cout << "MTWrapper Start. Counter=" << _ctx->MTCounter << std::endl;
 	_currentRound = _ctx->MTCounter;
 	_ctx->MTCounter++;
+	if( _ctx->timeTraceEntries.size() < _numCPPThreads + 1) {
+	    _ctx->timeTraceEntries.resize(_numCPPThreads + 1);
+	}
+	E_wrapper = {std::chrono::_V2::steady_clock::now(), {}, 0, _currentRound, 0, 0};
 	get_topology(topologyPhysicalIds, topologyUniqueThreads);
         if(ctx->config.numberOfThreads > 0){
             _numThreads = ctx->config.numberOfThreads;
@@ -333,6 +338,8 @@ public:
 
 //    virtual ~MTWrapperBase() = default;
     virtual ~MTWrapperBase() {
+	E_wrapper.Duration = std::chrono::_V2::steady_clock::now() - E_wrapper.Start;
+        _ctx->timeTraceEntries[0].push_back(std::move(E_wrapper));
         std::cout << "MTWrapper end." << std::endl;
     }
 };

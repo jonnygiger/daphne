@@ -59,16 +59,16 @@ public:
 class WorkerCPU : public Worker {
     TaskQueue* _q;
     bool _verbose;
+    int _threadID;
+    std::vector<Entry> *_localTraceEntries;
     uint32_t _fid;
     uint32_t _batchSize;
-    int _threadID;
     int _round;
     int _localTaskCounter;
-    std::vector<Entry> *_localTraceEntries;
 public:
     // this constructor is to be used in practice
     WorkerCPU(TaskQueue* tq, bool verbose, int workerNumber, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int round = 0) : Worker(), _q(tq),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(workerNumber), _round(round), _localTraceEntries(timeTraceEntries) {
+            _verbose(verbose), _threadID(workerNumber), _localTraceEntries(timeTraceEntries), _fid(fid), _batchSize(batchSize), _round(round) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPU::run, this);
     }
@@ -83,7 +83,7 @@ public:
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
-	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 0};
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 0};
             t->execute(_fid, _batchSize);
             delete t;
 	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -101,22 +101,22 @@ class WorkerCPUPerCPU : public Worker {
     std::vector<TaskQueue*> _q;
     std::vector<int> _physical_ids;
     std::vector<int> _unique_threads;
-    std::array<bool, 256> eofWorkers;
     bool _verbose;
+    int _threadID;
+    std::vector<Entry> *_localTraceEntries;
     uint32_t _fid;
     uint32_t _batchSize;
-    int _threadID;
     int _numQueues;
     int _queueMode;
     int _stealLogic;
-    int _round;
-    int _localTaskCounter;
     bool _pinWorkers;
-    std::vector<Entry> *_localTraceEntries;
+    int _round;
+    std::array<bool, 256> eofWorkers;
+    int _localTaskCounter;
 public:
     // this constructor is to be used in practice
     WorkerCPUPerCPU(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0, int round = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries), _round(round) {
+            _verbose(verbose), _threadID(threadID), _localTraceEntries(timeTraceEntries), _fid(fid), _batchSize(batchSize), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _round(round) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPUPerCPU::run, this);
     }
@@ -142,7 +142,7 @@ public:
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
-	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 0};
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 0};
             t->execute(_fid, _batchSize);
             delete t;
 	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -162,7 +162,7 @@ public:
                 if( isEOF(t) ) {
                     targetQueue = (targetQueue+1)%_numQueues;
                 } else {
-		    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
+		    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 1};
                     t->execute(_fid, _batchSize);
                     delete t;
 		    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -181,7 +181,7 @@ public:
                     if( isEOF(t) ) {
                         targetQueue = (targetQueue+1)%_numQueues;
                     } else {
-			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 2};
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 2};
                         t->execute(_fid, _batchSize);
                         delete t;
 			E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -203,7 +203,7 @@ public:
                     if( isEOF(t) ) {
                         targetQueue = (targetQueue+1)%_numQueues;
                     } else {
-			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 1};
                         t->execute(_fid, _batchSize);
                         delete t;
 			_localTraceEntries->push_back(std::move(E));
@@ -225,7 +225,7 @@ public:
                     if( isEOF(t) ) {
                         eofWorkers[targetQueue] = true;
                     } else {
-			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 1};
                         t->execute(_fid, _batchSize);
                         delete t;
 			E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -254,7 +254,7 @@ public:
                         if( isEOF(t) ) {
                             eofWorkers[targetQueue] = true;
                         } else {
-			    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 2};
+			    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 2};
                             t->execute(_fid, _batchSize);
                             delete t;
 			    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -276,7 +276,7 @@ public:
                     if( isEOF(t) ) {
                         eofWorkers[targetQueue] = true;
                     } else {
-			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
+			Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 1};
                         t->execute(_fid, _batchSize);
                         delete t;
 			E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -297,22 +297,22 @@ class WorkerCPUPerGroup : public Worker {
     std::vector<TaskQueue*> _q;
     std::vector<int> _physical_ids;
     std::vector<int> _unique_threads;
-    std::array<bool, 256> eofWorkers;
     bool _verbose;
+    int _threadID;
+    std::vector<Entry> *_localTraceEntries;
     uint32_t _fid;
     uint32_t _batchSize;
-    int _threadID;
     int _numQueues;
     int _queueMode;
     int _stealLogic;
-    int _round;
-    int _localTaskCounter;
     bool _pinWorkers;
-    std::vector<Entry> *_localTraceEntries;
+    int _round;
+    std::array<bool, 256> eofWorkers;
+    int _localTaskCounter;
 public:
     // this constructor is to be used in practice
     WorkerCPUPerGroup(std::vector<TaskQueue*> deques, std::vector<int> physical_ids, std::vector<int> unique_threads, bool verbose, int threadID, std::vector<Entry> *timeTraceEntries, uint32_t fid = 0, uint32_t batchSize = 100, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0, int round = 0) : Worker(), _q(deques), _physical_ids(physical_ids), _unique_threads(unique_threads),
-            _verbose(verbose), _fid(fid), _batchSize(batchSize), _threadID(threadID), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _localTraceEntries(timeTraceEntries), _round(round) {
+            _verbose(verbose), _threadID(threadID), _localTraceEntries(timeTraceEntries), _fid(fid), _batchSize(batchSize), _numQueues(numQueues), _queueMode(queueMode), _stealLogic(stealLogic), _pinWorkers(pinWorkers), _round(round) {
         // at last, start the thread
         t = std::make_unique<std::thread>(&WorkerCPUPerGroup::run, this);
     }
@@ -336,7 +336,7 @@ public:
             //execute self-contained task
             if( _verbose )
                 std::cerr << "WorkerCPU: executing task." << std::endl;
-	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 0};
+	    Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 0};
             t->execute(_fid, _batchSize);
             delete t;
 	    E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
@@ -357,7 +357,7 @@ public:
             if( isEOF(t) ) {
                 targetQueue = (targetQueue+1)%_numQueues;
             } else {
-		Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID, _round, _localTaskCounter, 1};
+		Entry E = {std::chrono::_V2::steady_clock::now(), {}, _threadID+1, _round, _localTaskCounter, 1};
                 t->execute(_fid, _batchSize);
                 delete t;
 		E.Duration = std::chrono::_V2::steady_clock::now() - E.Start;
