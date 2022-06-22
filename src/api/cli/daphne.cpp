@@ -168,11 +168,6 @@ main(int argc, char** argv)
             "select-matrix-representations", aliasopt(selectMatrixRepr),
             desc("Alias for --select-matrix-repr")
     );
-    // TODO: parse --explain=[list,of,compiler,passes,to,explain]
-    opt<bool> explainKernels(
-            "explain-kernels", cat(daphneOptions),
-            desc("Show DaphneIR after lowering to kernel calls")
-    );
     opt<bool> cuda(
             "cuda", cat(daphneOptions),
             desc("Use CUDA")
@@ -181,6 +176,31 @@ main(int argc, char** argv)
             "libdir", cat(daphneOptions),
             desc("The directory containing kernel libraries")
     );
+
+    enum ExplainArgs {
+      kernels,
+      llvm,
+      parsing,
+      property_inference,
+      sql,
+      vectorized,
+      obj_ref_mgnt
+    };
+
+    llvm::cl::list<ExplainArgs> explainArgList(
+        "explain", cat(daphneOptions),
+        llvm::cl::desc("Show DaphneIR after certain compiler passes (separate "
+                       "multiple values by comma, the order is irrelevant)"),
+        llvm::cl::values(
+            clEnumVal(parsing, "Show DaphneIR after parsing"),
+            clEnumVal(sql, "Show DaphneIR after SQL parsing"),
+            clEnumVal(property_inference, "Show DaphneIR after property inference"),
+            clEnumVal(vectorized, "Show DaphneIR after vectorization"),
+            clEnumVal(obj_ref_mgnt, "Show DaphneIR after managing object references"),
+            clEnumVal(kernels, "Show DaphneIR after kernel lowering"),
+            clEnumVal(llvm, "Show DaphneIR after llvm lowering")),
+        CommaSeparated);
+
     llvm::cl::list<string> scriptArgs1(
             "args", cat(daphneOptions),
             desc(
@@ -244,7 +264,6 @@ main(int argc, char** argv)
 //    user_config.debug_llvm = true;
     user_config.use_vectorized_exec = useVectorizedPipelines;
     user_config.use_obj_ref_mgnt = !noObjRefMgnt;
-    user_config.explain_kernels = explainKernels;
     user_config.libdir = libDir.getValue();
     user_config.library_paths.push_back(user_config.libdir + "/libAllKernels.so");
     user_config.taskPartitioningScheme = taskPartitioningScheme;
@@ -256,6 +275,32 @@ main(int argc, char** argv)
     user_config.hyperthreadingEnabled = hyperthreadingEnabled;
     user_config.debugMultiThreading = debugMultiThreading;
     user_config.prePartitionRows = prePartitionRows;
+
+    for (auto explain : explainArgList) {
+        switch (explain) {
+            case kernels:
+                user_config.explain_kernels = true;
+                break;
+            case llvm:
+                user_config.explain_llvm = true;
+                break;
+            case parsing:
+                user_config.explain_parsing = true;
+                break;
+            case property_inference:
+                user_config.explain_property_inference = true;
+                break;
+            case sql:
+                user_config.explain_sql = true;
+                break;
+            case vectorized:
+                user_config.explain_vectorized = true;
+                break;
+            case obj_ref_mgnt:
+                user_config.explain_obj_ref_mgnt = true;
+                break;
+        }
+    }
 
     if(cuda) {
         int device_count = 0;

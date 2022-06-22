@@ -65,9 +65,13 @@ void MTWrapper<CSRMatrix<VT>>::executeCpuQueues(std::vector<std::function<void(C
     }
 
 
-    assert(numOutputs == 1 && "TODO");
-    assert(*(res[0]) == nullptr && "TODO");
-    VectorizedDataSink<CSRMatrix<VT>> dataSink(combines[0], outRows[0], outCols[0]);
+    for(size_t i = 0; i < numOutputs; i++)
+        if(*(res[i]) != nullptr)
+            throw std::runtime_error("TODO");
+
+    std::vector<VectorizedDataSink<CSRMatrix<VT>> *> dataSinks(numOutputs);
+    for(size_t i = 0; i < numOutputs; i++)
+        dataSinks[i] = new VectorizedDataSink<CSRMatrix<VT>>(combines[i], outRows[i], outCols[i]);
 
     // lock for aggregation combine
     // TODO: multiple locks per output
@@ -106,39 +110,15 @@ void MTWrapper<CSRMatrix<VT>>::executeCpuQueues(std::vector<std::function<void(C
                     target = currentItr % this->_numQueues;
                     qvector[target]->enqueueTask(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
                 inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                outCols, 0, ctx}, dataSink));
-                    startChunk = endChunk;
-                }
-            }
-        }
-    } else {
-        LoadPartitioning lp(method, len, chunkParam, this->_numThreads, false);
-        if (ctx->getUserConfig().pinWorkers) {
-            while (lp.hasNextChunk()) {
-                endChunk += lp.getNextChunk();
-                target = currentItr % this->_numQueues;
-                qvector[target]->enqueueTaskPinned(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
-                inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                outCols, 0, ctx}, dataSink), target);
-                startChunk = endChunk;
-            }
-        } else {
-            while (lp.hasNextChunk()) {
-                endChunk += lp.getNextChunk();
-                target = currentItr % this->_numQueues;
-                qvector[target]->enqueueTask(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
-                inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                outCols, 0, ctx}, dataSink));
-                startChunk = endChunk;
-            }
-        }
-    }
-    for(int i=0; i<this->_numQueues; i++) {
-        qvector[i]->closeInput();
+                outCols, 0, ctx}, dataSinks));
+        startChunk = endChunk;
     }
 
     this->joinAll();
-    *(res[0]) = dataSink.consume();
+    for(size_t i = 0; i < numOutputs; i++) {
+        *(res[i]) = dataSinks[i]->consume();
+        delete dataSinks[i];
+    }
 }
 
 template<typename VT>
