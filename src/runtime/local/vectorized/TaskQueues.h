@@ -28,6 +28,8 @@ class TaskQueue {
 public:
     virtual ~TaskQueue() = default;
 
+    virtual void dequeueHalf(std::vector<Task*> &tmp) = 0;
+    virtual void enqueueBatch(std::vector<Task*> &tmp) = 0;
     virtual void enqueueTask(Task* t) = 0;
     virtual void enqueueTaskPinned(Task* t, int targetCPU) = 0;
     virtual Task* dequeueTask() = 0;
@@ -37,7 +39,7 @@ public:
 
 class BlockingTaskQueue : public TaskQueue {
 private:
-    std::list<Task*> _data;
+    std::deque<Task*> _data;
     std::mutex _qmutex;
     std::condition_variable _cv;
     EOFTask _eof; //end marker
@@ -51,6 +53,22 @@ public:
         _capacity = capacity;
     }
     ~BlockingTaskQueue() override = default;
+
+    void dequeueHalf(std::vector<Task*> &tmp) override {
+        std::unique_lock<std::mutex> ul(_qmutex);
+        int amountToSteal = _data.size()/2;
+        //std::cout << "stealAmount=" << amountToSteal << std::endl;
+        tmp.insert(tmp.end(), std::make_move_iterator(_data.begin() + _data.size() - amountToSteal), std::make_move_iterator(_data.end()));
+        _data.erase(_data.begin() + _data.size() - amountToSteal, _data.end());
+        _cv.notify_one();
+    }
+
+    void enqueueBatch(std::vector<Task*> &tmp) override {
+        std::unique_lock<std::mutex> ul(_qmutex);
+        _data.insert(_data.end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
+        _cv.notify_one();
+        tmp.erase(tmp.begin(), tmp.end());
+    }
 
     void enqueueTask(Task* t) override {
         // lock mutex, released at end of scope

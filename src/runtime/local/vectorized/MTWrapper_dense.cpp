@@ -82,7 +82,6 @@ void MTWrapper<DenseMatrix<VT>>::executeCpuQueues(
     int chunkParam = ctx->config.minimumTaskSize;
     if(chunkParam<=0)
         chunkParam=1;
-    if (ctx->getUserConfig().prePartitionRows) {
         uint64_t oneChunk = len/this->_numQueues;
         int remainder = len - (oneChunk * this->_numQueues);
         std::vector<LoadPartitioning> lps;
@@ -90,51 +89,16 @@ void MTWrapper<DenseMatrix<VT>>::executeCpuQueues(
         for(int i=1; i<this->_numQueues; i++) {
             lps.emplace_back(method, oneChunk, chunkParam, this->_numThreads, false);
         }
-        if (ctx->getUserConfig().pinWorkers) {
-            for(int i=0; i<this->_numQueues; i++) {
-                while (lps[i].hasNextChunk()) {
-                    endChunk += lps[i].getNextChunk();
-                    qvector[i]->enqueueTaskPinned(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
-                            inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                            outCols, 0, ctx}, resLock, res), this->topologyResponsibleThreads[i]);
-                    startChunk = endChunk;
-                }
-            }
-        } else {
-            for(int i=0; i<this->_numQueues; i++) {
-                while (lps[i].hasNextChunk()) {
-                    endChunk += lps[i].getNextChunk();
-                    qvector[i]->enqueueTask(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
-                            inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                            outCols, 0, ctx}, resLock, res));
-                    startChunk = endChunk;
-                }
-            }
+        for(int i=0; i<this->_numQueues; i++) {
+ 	    while (lps[i].hasNextChunk()) {
+                endChunk += lps[i].getNextChunk();
+                qvector[i]->enqueueTaskPinned(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
+        	        inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
+        	        outCols, 0, ctx}, resLock, res), this->topologyResponsibleThreads[i]);
+        	        startChunk = endChunk;
+       	    }
         }
-    } else {
-        LoadPartitioning lp(method, len, chunkParam, this->_numThreads, false);
-        if (ctx->getUserConfig().pinWorkers) {
-            while (lp.hasNextChunk()) {
-                endChunk += lp.getNextChunk();
-                target = currentItr % this->_numQueues;
-                qvector[target]->enqueueTaskPinned(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
-                        inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                        outCols, 0, ctx}, resLock, res), this->topologyUniqueThreads[target]);
-                startChunk = endChunk;
-		currentItr++;
-            }
-        } else {
-            while (lp.hasNextChunk()) {
-                endChunk += lp.getNextChunk();
-                target = currentItr % this->_numQueues;
-                qvector[target]->enqueueTask(new CompiledPipelineTask<DenseMatrix<VT>>(CompiledPipelineTaskData<DenseMatrix<VT>>{funcs, isScalar,
-                        inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                        outCols, 0, ctx}, resLock, res));
-                startChunk = endChunk;
-		currentItr++;
-            }
-        }
-    }
+    
     for(int i=0; i<this->_numQueues; i++) {
         qvector[i]->closeInput();
     }

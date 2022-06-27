@@ -90,11 +90,9 @@ protected:
                 if( _parseStringLine(line, "processor", &value ) ) {
                     utilizedThreads.push_back(value);
                 } else if( _parseStringLine(line, "physical id", &value) ) {
-                    if ( _ctx->getUserConfig().queueSetupScheme == PERGROUP ) {
                         if (std::find(physicalIds.begin(), physicalIds.end(), value) == physicalIds.end()) {
                             responsibleThreads.push_back(utilizedThreads[index]);
                         }
-                    }
                     physicalIds.push_back(value);
                 } else if( _parseStringLine(line, "core id", &value) ) {
                     int found = 0;
@@ -106,11 +104,6 @@ protected:
                     core_ids.push_back(value);
                     if( _ctx->config.hyperthreadingEnabled || found == 0 ) {
                         uniqueThreads.push_back(utilizedThreads[index]);
-                        if ( _ctx->getUserConfig().queueSetupScheme == PERCPU ) {
-                            responsibleThreads.push_back(value);
-                        } else if ( _ctx->getUserConfig().queueSetupScheme == CENTRALIZED ) {
-                            responsibleThreads.push_back(0);
-                        }
                     }
                     index++;
                 }
@@ -118,7 +111,7 @@ protected:
             cpuinfoFile.close();
         }
     }
-    void initCPPWorkers(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0) {
+    void initCPPWorkers(std::vector<TaskQueue*> &qvector, std::vector<int> numaDomains, uint32_t batchSize, bool verbose = false, int numQueues = 0, int queueMode = 0, int stealLogic = 0, bool pinWorkers = 0, bool foreman = 0) {
         cpp_workers.resize(_numCPPThreads);
         if( numQueues == 0 ) {
             std::cout << "numQueues is 0, this should not happen." << std::endl;
@@ -127,7 +120,13 @@ protected:
         
         int i = 0;
         for( auto& w : cpp_workers ) {
-            w = std::make_unique<WorkerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, 0, batchSize, i, numQueues, queueMode, this->_stealLogic, pinWorkers);
+            //std::cout << "i=" << i << ", physicalid=" << topologyPhysicalIds[i] << ", responsibleThread=" << topologyResponsibleThreads[topologyPhysicalIds[i]] << std::endl;
+            if( i == topologyResponsibleThreads[topologyPhysicalIds[i]] ) {
+                //std::cout << "Worker " << i << " is foreman for domain " << topologyPhysicalIds[i] << std::endl;
+                foreman = true;
+            }
+            w = std::make_unique<WorkerCPU>(qvector, topologyPhysicalIds, topologyUniqueThreads, verbose, 0, batchSize, i, numQueues, queueMode, this->_stealLogic, pinWorkers, foreman);
+            foreman = false;
             i++;
         }
     }
@@ -183,8 +182,7 @@ public:
         get_topology(topologyPhysicalIds, topologyUniqueThreads, topologyResponsibleThreads);
         if ( ctx->config.numberOfThreads > 0 ) {
             _numCPPThreads = ctx->config.numberOfThreads;
-        }
-        else {
+        } else {
             //_numCPPThreads = std::thread::hardware_concurrency();
             _numCPPThreads = topologyUniqueThreads.size();
         }
@@ -196,7 +194,7 @@ public:
         }
         if(ctx && ctx->useCUDA() && numFunctions > 1)
             _numCUDAThreads = ctx->cuda_contexts.size();
-        _queueMode = 0;
+        _queueMode = 1;
         _numQueues = 1;
         _stealLogic = _ctx->getUserConfig().victimSelection;
         if( std::thread::hardware_concurrency() < topologyUniqueThreads.size() && _ctx->config.hyperthreadingEnabled )
@@ -204,13 +202,8 @@ public:
         _numThreads = _numCPPThreads + _numCUDAThreads;
         _totalNumaDomains = std::set<double>( topologyPhysicalIds.begin(), topologyPhysicalIds.end() ).size();
 
-        if ( _ctx->getUserConfig().queueSetupScheme == PERGROUP ) {
-            _queueMode = 1;
-            _numQueues = _totalNumaDomains;
-        } else if ( _ctx->getUserConfig().queueSetupScheme == PERCPU ) {
-            _queueMode = 2;
-            _numQueues = _numCPPThreads;
-        }
+        _queueMode = 1;
+        _numQueues = _totalNumaDomains;
         
         if( _ctx->config.debugMultiThreading ) {
             std::cout << "topologyPhysicalIds:" << std::endl;

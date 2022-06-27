@@ -28,7 +28,7 @@ void MTWrapper<CSRMatrix<VT>>::executeCpuQueues(std::vector<std::function<void(C
     auto mem_required = inputProps.second;
     // TODO: sparse output mem requirements
     auto row_mem = mem_required / len;
-
+std::cout << "IN MTWRAPPER SPARSE" << std::endl;
     std::vector<std::unique_ptr<TaskQueue>> q;
     std::vector<TaskQueue*> qvector;
     if (ctx->getUserConfig().pinWorkers) {
@@ -74,64 +74,6 @@ void MTWrapper<CSRMatrix<VT>>::executeCpuQueues(std::vector<std::function<void(C
     uint64_t target = 0;
     int method=ctx->config.taskPartitioningScheme;
     int chunkParam = ctx->config.minimumTaskSize;
-    if(chunkParam<=0)
-        chunkParam=1;
-    if (ctx->getUserConfig().prePartitionRows) {
-        uint64_t oneChunk = len/this->_numQueues;
-        int remainder = len - (oneChunk * this->_numQueues);
-        std::vector<LoadPartitioning> lps;
-        lps.emplace_back(method, oneChunk+remainder, chunkParam, this->_numThreads, false);
-        for(int i=1; i<this->_numQueues; i++) {
-            lps.emplace_back(method, oneChunk, chunkParam, this->_numThreads, false);
-        }
-        if (ctx->getUserConfig().pinWorkers) {
-            for(int i=0; i<this->_numQueues; i++) {
-                while (lps[i].hasNextChunk()) {
-                    endChunk += lps[i].getNextChunk();
-                    qvector[i]->enqueueTaskPinned(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
-                            inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                            outCols, 0, ctx}, dataSinks), this->topologyResponsibleThreads[i]);
-                    startChunk = endChunk;
-                }
-            }
-        } else {
-            for(int i=0; i<this->_numQueues; i++) {
-                while (lps[i].hasNextChunk()) {
-                    endChunk += lps[i].getNextChunk();
-                    qvector[i]->enqueueTask(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
-                            inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                            outCols, 0, ctx}, dataSinks));
-                    startChunk = endChunk;
-                }
-            }
-        }
-    } else {
-        LoadPartitioning lp(method, len, chunkParam, this->_numThreads, false);
-        if (ctx->getUserConfig().pinWorkers) {
-            while (lp.hasNextChunk()) {
-                endChunk += lp.getNextChunk();
-                target = currentItr % this->_numQueues;
-                qvector[target]->enqueueTaskPinned(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
-                        inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                        outCols, 0, ctx}, dataSinks), target);
-                startChunk = endChunk;
-		currentItr++;
-            }
-        } else {
-            while (lp.hasNextChunk()) {
-                endChunk += lp.getNextChunk();
-                target = currentItr % this->_numQueues;
-                qvector[target]->enqueueTask(new CompiledPipelineTask<CSRMatrix<VT>>(CompiledPipelineTaskData<CSRMatrix<VT>>{funcs, isScalar,
-                        inputs, numInputs, numOutputs, outRows, outCols, splits, combines, startChunk, endChunk, outRows,
-                        outCols, 0, ctx}, dataSinks));
-                startChunk = endChunk;
-		currentItr++;
-            }
-        }
-    }
-    for(int i=0; i<this->_numQueues; i++) {
-        qvector[i]->closeInput();
-    }
 
     this->joinAll();
     for(size_t i = 0; i < numOutputs; i++) {
